@@ -1,4 +1,3 @@
-
 /*--------------------------------------------------------------------*/
 /*--- BBedgegrind: A valgrind tool for recording                   ---*/
 /*---              basic block edge transition coverage.           ---*/ 
@@ -6,11 +5,105 @@
 /*--------------------------------------------------------------------*/
 
 #include "pub_tool_basics.h"
+#include "pub_tool_vki.h"
 #include "pub_tool_tooliface.h"
 #include "pub_tool_libcassert.h"
+#include "pub_tool_libcprint.h"
+#include "pub_tool_machine.h"
+#include "pub_tool_libcbase.h"
+#include "pub_tool_debuginfo.h"
+#include "pub_tool_addrinfo.h"
+#include "pub_tool_mallocfree.h"
+
+struct BasicBlockRecord {
+      Addr bb_source;
+      struct BasicBlockRecord *next;
+};
+
+struct BasicBlockRecordHead {
+      struct BasicBlockRecord *next;
+      struct BasicBlockRecord *last;	
+};
+
+struct BasicBlockRecordHead *global_bbs = NULL;
+
+static Bool found_bb_record(Addr addr)
+{
+  struct BasicBlockRecord *cur;
+
+  cur = global_bbs->next;
+  while (cur != NULL)
+  {
+
+    if (addr == cur->bb_source)
+    {
+      VG_(printf)("Already covered address 0x%08x\n", addr);
+      return 1;
+    }
+
+    cur = cur->next; 
+  }
+
+  return 0;
+}
+
+static void bbe_bb_instrument(Addr addr)
+{
+  VG_(printf)("Analyzing at addr: 0x%08x\n", addr);
+  if (global_bbs == NULL)
+  {
+    global_bbs = (struct BasicBlockRecordHead *) VG_(malloc)("block_head", sizeof(struct BasicBlockRecordHead));
+
+    struct BasicBlockRecord *first_bb = VG_(malloc)("block", sizeof(struct BasicBlockRecord));
+
+    first_bb->next = NULL;
+    first_bb->bb_source = addr;
+
+    global_bbs->next = first_bb;
+    global_bbs->last = first_bb;
+  }
+  else
+  {
+    Bool result = found_bb_record(addr);
+
+    if (!found_bb_record(addr))
+    {
+      VG_(printf)("Creating new basic block record for 0x%08x\n", addr);
+      struct BasicBlockRecord *new_record = VG_(malloc)("block", sizeof(struct BasicBlockRecord));
+      global_bbs->last->next = new_record;
+      global_bbs->last = new_record;
+
+      new_record->bb_source = addr;
+      new_record->next = NULL;
+    }
+  }
+}
 
 static void bbe_post_clo_init(void)
 {
+}
+
+static void bbe_new_mem_mmap(Addr a, SizeT len, Bool rr, Bool ww, Bool xx, ULong di_handle )
+{
+  AddrInfo test;
+
+  VG_(memset)(&test, 0x00, sizeof(AddrInfo));
+  VG_(printf)("New mmap event at address 0x%08x of length 0x%08x\n", a, len);
+
+  VG_(describe_addr)( a, &test);
+
+  VG_(pp_addrinfo)( a, &test);
+
+  //If segment is executable and corresponds to a mapped file (not JIT) then we 
+  //should record this so that we know which basic blocks correspond to which code
+  //in which file. At termination we can write everything to a file and then do mmap
+  //relations offline by having an mmap file or by emitting separate files for each
+  //maped code file loaded and executed.
+}
+
+static void bbe_die_mem_munmap( Addr a, SizeT len )
+{
+  VG_(printf)("New munmap call on addr 0x%08x of size 0x%08x\n", a, len);
 }
 
 static
@@ -23,6 +116,8 @@ IRSB* bbe_instrument ( VgCallbackClosure* closure,
 {
     Int    i;
     IRSB * sbOut;
+    IRDirty *di;
+    IRExpr **argv;
 
     sbOut = deepCopyIRSBExceptStmts(bb);
 
@@ -31,6 +126,18 @@ IRSB* bbe_instrument ( VgCallbackClosure* closure,
         addStmtToIRSB( sbOut, bb->stmts[i] );
         i++;
     }
+
+    //Print address of super block
+    VG_(printf)("Testing in translation routine 0x%08x\n", bb->stmts[i]->Ist.IMark.addr);
+    VG_(printf)("Number of IR statements in basic block %d\n", bb->stmts_used);
+
+    argv = mkIRExprVec_1( mkIRExpr_HWord( (HWord) bb->stmts[i]->Ist.IMark.addr));
+
+    di = unsafeIRDirty_0_N( 0, "bbe_bb_instrument",
+			    VG_(fnptr_to_fnentry( &bbe_bb_instrument) ),
+			    argv);
+
+    addStmtToIRSB( sbOut, IRStmt_Dirty(di) );
 
     for(; i < bb->stmts_used; i++)
     {
@@ -47,7 +154,8 @@ IRSB* bbe_instrument ( VgCallbackClosure* closure,
               addStmtToIRSB( sbOut, st );
               break;
 
-           case Ist_IMark:
+           case Ist_IMark: 
+
               addStmtToIRSB( sbOut, st );
               break;
 
@@ -93,6 +201,17 @@ IRSB* bbe_instrument ( VgCallbackClosure* closure,
 
 static void bbe_fini(Int exitcode)
 {
+  VgFile *fp = VG_(fopen)("test_output", VKI_O_CREAT|VKI_O_WRONLY, VKI_S_IRUSR | VKI_S_IWUSR | VKI_S_IRGRP | VKI_S_IWGRP);
+
+  struct BasicBlockRecord *cur = global_bbs->next;
+
+  while (cur != NULL)
+  {
+    VG_(fprintf)(fp, "0x%08x\n", cur->bb_source);
+    cur = cur->next;
+  }
+
+  VG_(fclose)(fp);
 }
 
 static void bbe_pre_clo_init(void)
@@ -109,6 +228,11 @@ static void bbe_pre_clo_init(void)
    VG_(basic_tool_funcs)        (bbe_post_clo_init,
                                  bbe_instrument,
                                  bbe_fini);
+
+   VG_(track_new_mem_mmap) ( bbe_new_mem_mmap );
+
+   //Should really keep tabs on VG_(track_die_mem_munmap) also to see if files are ever unloaded from memory
+   VG_(track_die_mem_munmap) ( bbe_die_mem_munmap );
 
    /* No needs, no core events to track */
 }
