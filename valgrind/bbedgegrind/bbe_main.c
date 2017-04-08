@@ -49,8 +49,8 @@ struct BasicBlockRecord {
 };
 
 struct BasicBlockRecordHead {
-      struct BasicBlockRecord *next;
-      struct BasicBlockRecord *last;	
+    struct BasicBlockRecord *next;
+    struct BasicBlockRecord *last;
 };
 
 struct BasicBlockRecordHead *global_bbs = NULL;
@@ -101,28 +101,28 @@ static void bbe_thread_call( ThreadId tid, ULong disp )
     {
         //Need to allocate a new thread structure to hold last
         //bb address
-	if (thread_list == 0)
-	{
-          thread_list = VG_(malloc)("thread_head", sizeof(struct ThreadBBInfoHead));
-	  struct ThreadBBInfo *new_tinfo = VG_(malloc)("thread", sizeof(struct ThreadBBInfo));
+        if (thread_list == 0)
+        {
+            thread_list = VG_(malloc)("thread_head", sizeof(struct ThreadBBInfoHead));
+            struct ThreadBBInfo *new_tinfo = VG_(malloc)("thread", sizeof(struct ThreadBBInfo));
 
-	  new_tinfo->thread_id = tid;
-	  new_tinfo->last_bb = 0;
-          new_tinfo->next = 0;
+            new_tinfo->thread_id = tid;
+            new_tinfo->last_bb = 0;
+            new_tinfo->next = 0;
 
-          thread_list->next = new_tinfo;
-          thread_list->last = new_tinfo;
-	}
+            thread_list->next = new_tinfo;
+            thread_list->last = new_tinfo;
+        }
         else
         {
- 	  struct ThreadBBInfo *new_tinfo = VG_(malloc)("thread", sizeof(struct ThreadBBInfo));
+            struct ThreadBBInfo *new_tinfo = VG_(malloc)("thread", sizeof(struct ThreadBBInfo));
 
-          new_tinfo->thread_id = tid;
-          new_tinfo->last_bb = 0; 
-          new_tinfo->next = 0;
+            new_tinfo->thread_id = tid;
+            new_tinfo->last_bb = 0; 
+            new_tinfo->next = 0;
 
-          thread_list->last->next = new_tinfo;
-          thread_list->last = new_tinfo;
+            thread_list->last->next = new_tinfo;
+            thread_list->last = new_tinfo;
         }
 
         total_threads = tid + 1;
@@ -133,145 +133,144 @@ static void bbe_thread_call( ThreadId tid, ULong disp )
 
 static Bool found_bb_record(Addr source, Addr dest)
 {
-  struct BasicBlockRecord *cur;
+    struct BasicBlockRecord *cur;
 
-  cur = global_bbs->next;
-  while (cur != NULL)
-  {
-
-    if (source == cur->bb_source && dest == cur->bb_dest)
+    cur = global_bbs->next;
+    while (cur != NULL)
     {
-      //VG_(printf)("Already covered pair 0x%08x,0x%08x\n", source, dest);
-      return 1;
+
+        if (source == cur->bb_source && dest == cur->bb_dest)
+        {
+            //VG_(printf)("Already covered pair 0x%08x,0x%08x\n", source, dest);
+            return 1;
+        }
+
+        cur = cur->next; 
     }
 
-    cur = cur->next; 
-  }
-
-  return 0;
+    return 0;
 }
 
 static struct ThreadBBInfo * find_tinfo_entry(ThreadId tid)
 {
-  struct ThreadBBInfo *cur;
+    struct ThreadBBInfo *cur;
 
-  cur = thread_list->next;
+    cur = thread_list->next;
 
-  while (cur != NULL)
-  {
-    if (cur->thread_id == tid)
-      return cur;
+    while (cur != NULL)
+    {
+        if (cur->thread_id == tid)
+            return cur;
 
-    cur = cur->next;
-  }
+        cur = cur->next;
+    }
 
-  return NULL;
+    return NULL;
 }
 
 static void bbe_bb_instrument(Addr addr)
 {
-  //VG_(printf)("Analyzing at addr: 0x%08x\n", addr);
-  struct ThreadBBInfo *tinfo = find_tinfo_entry(active_thread);
+    //VG_(printf)("Analyzing at addr: 0x%08x\n", addr);
+    struct ThreadBBInfo *tinfo = find_tinfo_entry(active_thread);
 
-  tl_assert(tinfo != NULL);
+    tl_assert(tinfo != NULL);
 
-  if (tinfo->last_bb && tinfo->last_bb != addr && !found_bb_record(tinfo->last_bb, addr))
-  {
-    //VG_(printf)("Creating new basic block record for 0x%08x\n", addr);
-    struct BasicBlockRecord *new_record = VG_(malloc)("block", sizeof(struct BasicBlockRecord));
+    if (tinfo->last_bb && tinfo->last_bb != addr && !found_bb_record(tinfo->last_bb, addr))
+    {
+        //VG_(printf)("Creating new basic block record for 0x%08x\n", addr);
+        struct BasicBlockRecord *new_record = VG_(malloc)("block", sizeof(struct BasicBlockRecord));
 
-    if (global_bbs->last != NULL)
-      global_bbs->last->next = new_record;
+        if (global_bbs->last != NULL)
+            global_bbs->last->next = new_record;
 
-    if (global_bbs->next == NULL)
-      global_bbs->next = new_record;
+        if (global_bbs->next == NULL)
+            global_bbs->next = new_record;
 
-    global_bbs->last = new_record;
+        global_bbs->last = new_record;
 
-    VG_(printf)("Testing pair 0x%08x,0x%08x\n", tinfo->last_bb, addr);
+        VG_(printf)("Testing pair 0x%08x,0x%08x\n", tinfo->last_bb, addr);
 
-    new_record->bb_source = tinfo->last_bb;
-    new_record->bb_dest = addr;
-    new_record->next = NULL;
-  }
+        new_record->bb_source = tinfo->last_bb;
+        new_record->bb_dest = addr;
+        new_record->next = NULL;
+    }
 
-  tinfo->last_bb = addr;
+    tinfo->last_bb = addr;
 }
 
 static void bbe_post_clo_init(void)
 {
-  global_bbs = (struct BasicBlockRecordHead *) VG_(malloc)("block_head", sizeof(struct BasicBlockRecordHead));
+    global_bbs = (struct BasicBlockRecordHead *) VG_(malloc)("block_head", sizeof(struct BasicBlockRecordHead));
 
-  global_bbs->next = NULL;
-  global_bbs->last = NULL;
+    global_bbs->next = NULL;
+    global_bbs->last = NULL;
 
-  char *mmap_filename = (char *) "test_output.mmap";
+    char *mmap_filename = (char *) "test_output.mmap";
 
-  if (clo_output_prefix != 0)
-  {
-    mmap_filename = VG_(malloc)("filename", (VG_(strlen)(clo_output_prefix) + VG_(strlen)(".mmap") + 1));
-    VG_(memset)(mmap_filename, 0x00, VG_(strlen)(clo_output_prefix) + VG_(strlen)(".mmap") + 1);
-    VG_(strncpy)(mmap_filename, clo_output_prefix, VG_(strlen)(clo_output_prefix));
-    VG_(strncat)(mmap_filename, ".mmap", VG_(strlen)(".mmap"));
-  }
+    if (clo_output_prefix != 0)
+    {
+        mmap_filename = VG_(malloc)("filename", (VG_(strlen)(clo_output_prefix) + VG_(strlen)(".mmap") + 1));
+        VG_(memset)(mmap_filename, 0x00, VG_(strlen)(clo_output_prefix) + VG_(strlen)(".mmap") + 1);
+        VG_(strncpy)(mmap_filename, clo_output_prefix, VG_(strlen)(clo_output_prefix));
+        VG_(strncat)(mmap_filename, ".mmap", VG_(strlen)(".mmap"));
+    }
 
-  mmap_fh = VG_(fopen)(mmap_filename, VKI_O_CREAT|VKI_O_WRONLY, VKI_S_IRUSR | VKI_S_IWUSR | VKI_S_IRGRP | VKI_S_IWGRP);
-
+    mmap_fh = VG_(fopen)(mmap_filename, VKI_O_CREAT|VKI_O_WRONLY, VKI_S_IRUSR | VKI_S_IWUSR | VKI_S_IRGRP | VKI_S_IWGRP);
 }
 
 static void bbe_new_mem_mmap(Addr a, SizeT len, Bool rr, Bool ww, Bool xx, ULong di_handle )
 {
-  AddrInfo test;
+    AddrInfo test;
 
-  VG_(memset)(&test, 0x00, sizeof(AddrInfo));
-  VG_(printf)("New mmap event at address 0x%08x of length 0x%08x\n", a, len);
+    VG_(memset)(&test, 0x00, sizeof(AddrInfo));
+    VG_(printf)("New mmap event at address 0x%08x of length 0x%08x\n", a, len);
 
-  VG_(describe_addr)( a, &test);
+    VG_(describe_addr)( a, &test);
 
-  VG_(pp_addrinfo)( a, &test);
+    VG_(pp_addrinfo)( a, &test);
 
-  if (test.Addr.SegmentKind.segkind == SkFileC && test.Addr.SegmentKind.hasX)
-  {
-     VG_(fprintf)(mmap_fh, "%s,0x%08x,0x%08x\n", test.Addr.SegmentKind.filename, a, len);
+    if (test.Addr.SegmentKind.segkind == SkFileC && test.Addr.SegmentKind.hasX)
+    {
+        VG_(fprintf)(mmap_fh, "%s,0x%08x,0x%08x\n", test.Addr.SegmentKind.filename, a, len);
 
-     //If segment is executable and corresponds to a mapped file (not JIT) then we 
-     //should record this so that we know which basic blocks correspond to which code
-     //in which file. At termination we can write everything to a file and then do mmap
-     //relations offline by having an mmap file or by emitting separate files for each
-     //maped code file loaded and executed.
+        //If segment is executable and corresponds to a mapped file (not JIT) then we 
+        //should record this so that we know which basic blocks correspond to which code
+        //in which file. At termination we can write everything to a file and then do mmap
+        //relations offline by having an mmap file or by emitting separate files for each
+        //maped code file loaded and executed.
 
-     //We need to extract filenames for mmap executable regions and write this to a separate
-     //output file.
-     //Allow comparison against library names to grab addresses to instrument
-     //This is useful for PIE binaries and shared libraries
-     //
-     //Also make sure the user is not currently instrumeting a range
-     //if (clo_start_address == 0x00 && clo_end_address == 0xFFFFFFFF)
-     //{
-     if (clo_library_name != NULL)
-     {
-     	char *fname_ptr = VG_(strrchr)(test.Addr.SegmentKind.filename, '/');
-     	VG_(printf)("Filename without path %s\n", fname_ptr + 1);
-
-        if(!VG_(strncmp)(fname_ptr+1, clo_library_name, VG_(strlen(clo_library_name))))
+        //We need to extract filenames for mmap executable regions and write this to a separate
+        //output file.
+        //Allow comparison against library names to grab addresses to instrument
+        //This is useful for PIE binaries and shared libraries
+        //
+        //Also make sure the user is not currently instrumeting a range
+        //if (clo_start_address == 0x00 && clo_end_address == 0xFFFFFFFF)
+        //{
+        if (clo_library_name != NULL)
         {
-			if (clo_start_address == 0 && clo_end_address == 0xFFFFFFFF)
-			{
-				VG_(printf)("No instrumentation before now");
-				clo_start_address = a;
-				clo_end_address = a + len;
-			}
+             char *fname_ptr = VG_(strrchr)(test.Addr.SegmentKind.filename, '/');
+             VG_(printf)("Filename without path %s\n", fname_ptr + 1);
 
-			//There are some cases left out here that we should probably handle but
-			//ignore for now.
-		}
-     }          
-  }
+            if(!VG_(strncmp)(fname_ptr+1, clo_library_name, VG_(strlen(clo_library_name))))
+            {
+                if (clo_start_address == 0 && clo_end_address == 0xFFFFFFFF)
+                {
+                    VG_(printf)("No instrumentation before now");
+                    clo_start_address = a;
+                    clo_end_address = a + len;
+                }
+
+                //There are some cases left out here that we should probably handle but
+                //ignore for now.
+            }
+        }          
+    }
 }
 
 static void bbe_die_mem_munmap( Addr a, SizeT len )
 {
-  VG_(printf)("New munmap call on addr 0x%08x of size 0x%08x\n", a, len);
+    VG_(printf)("New munmap call on addr 0x%08x of size 0x%08x\n", a, len);
 }
 
 static
@@ -303,78 +302,75 @@ IRSB* bbe_instrument ( VgCallbackClosure* closure,
 
     //If clo_library_name is set we need to wait until clo_start_address and clo_end_address
     //are set by waiting for the MMAP to occur
-    VG_(printf)("Testing expression 1 %d\n", (clo_library_name && (clo_start_address != 0x00 && clo_end_address != 0xFFFFFFFF) &&
-        (test_addr >= clo_start_address && test_addr <= clo_end_address)));
-    VG_(printf)("Testing expression 2 %d\n", ((!clo_library_name && (test_addr >= clo_start_address && test_addr <= clo_end_address))));
     if ((clo_library_name && (clo_start_address != 0x00 && clo_end_address != 0xFFFFFFFF) &&
         (test_addr >= clo_start_address && test_addr <= clo_end_address)) ||
        ((!clo_library_name && (test_addr >= clo_start_address && test_addr <= clo_end_address)))
        )
     {
-      argv = mkIRExprVec_1( mkIRExpr_HWord( (HWord) bb->stmts[i]->Ist.IMark.addr));
+        argv = mkIRExprVec_1( mkIRExpr_HWord( (HWord) bb->stmts[i]->Ist.IMark.addr));
 
-      di = unsafeIRDirty_0_N( 0, "bbe_bb_instrument",
-			      VG_(fnptr_to_fnentry( &bbe_bb_instrument) ),
-			      argv);
+        di = unsafeIRDirty_0_N( 0, "bbe_bb_instrument",
+                      VG_(fnptr_to_fnentry( &bbe_bb_instrument) ),
+                      argv);
 
-      addStmtToIRSB( sbOut, IRStmt_Dirty(di) );
+        addStmtToIRSB( sbOut, IRStmt_Dirty(di) );
     }
 
     for(; i < bb->stmts_used; i++)
     {
-       IRStmt* st = bb->stmts[i];
-       if(!st || st->tag == Ist_NoOp) continue;
+        IRStmt* st = bb->stmts[i];
+        if(!st || st->tag == Ist_NoOp) continue;
 
-       switch(st->tag)
-       {
-           case Ist_NoOp:
-           case Ist_AbiHint:
-           case Ist_Put:
-           case Ist_PutI:
-           case Ist_MBE:
-              addStmtToIRSB( sbOut, st );
-              break;
+        switch(st->tag)
+        {
+            case Ist_NoOp:
+            case Ist_AbiHint:
+            case Ist_Put:
+            case Ist_PutI:
+            case Ist_MBE:
+                addStmtToIRSB( sbOut, st );
+                break;
 
-           case Ist_IMark: 
+            case Ist_IMark: 
 
-              addStmtToIRSB( sbOut, st );
-              break;
+                addStmtToIRSB( sbOut, st );
+                break;
 
-           case Ist_WrTmp:
-              addStmtToIRSB( sbOut, st );
-              break;
-           case Ist_Store:
-              addStmtToIRSB( sbOut, st );  	
-              break;
+            case Ist_WrTmp:
+                addStmtToIRSB( sbOut, st );
+                break;
+            case Ist_Store:
+                addStmtToIRSB( sbOut, st );      
+                break;
 
-           case Ist_StoreG:
-              addStmtToIRSB( sbOut, st );
-              break;
+            case Ist_StoreG:
+                addStmtToIRSB( sbOut, st );
+                break;
 
-           case Ist_LoadG:
-              addStmtToIRSB( sbOut, st );
-              break;
+            case Ist_LoadG:
+                addStmtToIRSB( sbOut, st );
+                break;
 
-           case Ist_Dirty:
-              addStmtToIRSB( sbOut, st );
-              break;
+            case Ist_Dirty:
+                addStmtToIRSB( sbOut, st );
+                break;
 
-           case Ist_CAS:
-              addStmtToIRSB( sbOut, st );
-              break;
+            case Ist_CAS:
+                addStmtToIRSB( sbOut, st );
+                break;
 
-           case Ist_LLSC:
-              addStmtToIRSB( sbOut, st );
-              break;
+            case Ist_LLSC:
+                addStmtToIRSB( sbOut, st );
+                break;
 
-           case Ist_Exit:
-              addStmtToIRSB( sbOut, st );
-              break;
+            case Ist_Exit:
+                addStmtToIRSB( sbOut, st );
+                break;
 
-           default:
-              ppIRStmt(st);
-              tl_assert(0);
-       }
+            default:
+                ppIRStmt(st);
+                tl_assert(0);
+        }
     }
 
     return sbOut;
@@ -382,58 +378,58 @@ IRSB* bbe_instrument ( VgCallbackClosure* closure,
 
 static void bbe_fini(Int exitcode)
 {
-  char *filename = (char *) "test_output.coverage";
+    char *filename = (char *) "test_output.coverage";
 
-  if (clo_output_prefix != 0)
-  {
-    filename = VG_(malloc)("filename", (VG_(strlen)(clo_output_prefix) + VG_(strlen)(".coverage") + 1));
-    VG_(memset)((char *) filename, 0x00, VG_(strlen)(clo_output_prefix) + VG_(strlen)(".coverage") + 1);
-    VG_(strncpy)((char *) filename, clo_output_prefix, VG_(strlen)(clo_output_prefix));
-    VG_(strncat)((char *) filename, ".coverage", VG_(strlen)(".coverage"));
-  }
+    if (clo_output_prefix != 0)
+    {
+        filename = VG_(malloc)("filename", (VG_(strlen)(clo_output_prefix) + VG_(strlen)(".coverage") + 1));
+        VG_(memset)((char *) filename, 0x00, VG_(strlen)(clo_output_prefix) + VG_(strlen)(".coverage") + 1);
+        VG_(strncpy)((char *) filename, clo_output_prefix, VG_(strlen)(clo_output_prefix));
+        VG_(strncat)((char *) filename, ".coverage", VG_(strlen)(".coverage"));
+    }
 
-  VgFile *fp = VG_(fopen)(filename, VKI_O_CREAT|VKI_O_WRONLY, VKI_S_IRUSR | VKI_S_IWUSR | VKI_S_IRGRP | VKI_S_IWGRP);
+    VgFile *fp = VG_(fopen)(filename, VKI_O_CREAT|VKI_O_WRONLY, VKI_S_IRUSR | VKI_S_IWUSR | VKI_S_IRGRP | VKI_S_IWGRP);
 
-  struct BasicBlockRecord *cur = global_bbs->next;
+    struct BasicBlockRecord *cur = global_bbs->next;
 
-  while (cur != NULL)
-  {
-    VG_(fprintf)(fp, "0x%08x,0x%08x\n", cur->bb_source, cur->bb_dest);
-    cur = cur->next;
-  }
+    while (cur != NULL)
+    {
+        VG_(fprintf)(fp, "0x%08x,0x%08x\n", cur->bb_source, cur->bb_dest);
+        cur = cur->next;
+    }
 
-  VG_(fclose)(fp);
+    VG_(fclose)(fp);
 
-  //Close the mmap_fh
-  VG_(fclose)(mmap_fh);
+    //Close the mmap_fh
+    VG_(fclose)(mmap_fh);
 }
 
 static void bbe_pre_clo_init(void)
 {
-   VG_(details_name)            ("BBEdgegrind");
-   VG_(details_version)         (NULL);
-   VG_(details_description)     ("Valgrind Tool To Monitor Basic Block Edge Coverage");
-   VG_(details_copyright_author)(
-      "Andrew Calvano");
-   VG_(details_bug_reports_to)  (VG_BUGS_TO);
+    VG_(details_name)            ("BBEdgegrind");
+    VG_(details_version)         (NULL);
+    VG_(details_description)     ("Valgrind Tool To Monitor Basic Block Edge Coverage");
+    VG_(details_copyright_author)(
+          "Andrew Calvano");
+    VG_(details_bug_reports_to)  (VG_BUGS_TO);
 
-   VG_(details_avg_translation_sizeB) ( 275 );
+    VG_(details_avg_translation_sizeB) ( 275 );
 
-   VG_(basic_tool_funcs)        (bbe_post_clo_init,
-                                 bbe_instrument,
-                                 bbe_fini);
+    VG_(basic_tool_funcs)        (bbe_post_clo_init,
+                                  bbe_instrument,
+                                  bbe_fini);
 
-   VG_(track_new_mem_mmap) ( bbe_new_mem_mmap );
+    VG_(track_new_mem_mmap) ( bbe_new_mem_mmap );
 
-   //Should really keep tabs on VG_(track_die_mem_munmap) also to see if files are ever unloaded from memory
-   VG_(track_die_mem_munmap) ( bbe_die_mem_munmap );
+    //Should really keep tabs on VG_(track_die_mem_munmap) also to see if files are ever unloaded from memory
+    VG_(track_die_mem_munmap) ( bbe_die_mem_munmap );
 
-   VG_(needs_command_line_options) (bbe_process_cmd_line_option,
-               			  bbe_print_usage,
-                                  bbe_print_debug_usage);
+    VG_(needs_command_line_options) (bbe_process_cmd_line_option,
+                                     bbe_print_usage,
+                                     bbe_print_debug_usage);
 
-   //Thread Related Callbacks
-   VG_(track_start_client_code)( bbe_thread_call );
+    //Thread Related Callbacks
+    VG_(track_start_client_code)( bbe_thread_call );
 }
 
 VG_DETERMINE_INTERFACE_VERSION(bbe_pre_clo_init)
