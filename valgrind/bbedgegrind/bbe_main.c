@@ -14,6 +14,7 @@
 #include "pub_tool_debuginfo.h"
 #include "pub_tool_addrinfo.h"
 #include "pub_tool_mallocfree.h"
+#include "pub_tool_options.h"
 
 struct BasicBlockRecord {
       Addr bb_source;
@@ -26,6 +27,38 @@ struct BasicBlockRecordHead {
 };
 
 struct BasicBlockRecordHead *global_bbs = NULL;
+
+
+static Int clo_start_address = 0;
+static Int clo_end_address = 0xFFFFFFFF;
+static const char *clo_output_prefix = 0;
+
+static Bool bbe_process_cmd_line_option(const HChar* arg)
+{
+    if( VG_BHEX_CLO(arg, "--start_address", clo_start_address, 0x00, 0xFFFFFFFF)) {}
+    else if (VG_BHEX_CLO(arg, "--end_address", clo_end_address, 0x00, 0xFFFFFFFF)) {}
+    else if (VG_STR_CLO(arg, "--output_prefix", clo_output_prefix)) {}
+    else
+        return False;
+
+    return True;
+}
+
+static void bbe_print_usage(void)
+{
+    VG_(printf)(
+"    --start_address=<hex_address>       specifies lower limit of addresses to collect coverage for.\n"
+"    --end_address=<hex_address>         specifies upper limit of addresses to collect coverage for.\n"
+"    --output_prefix=<name>              specifies prefix to dump coverage and mmap data to.\n"
+    );
+}
+
+static void bbe_print_debug_usage(void)
+{
+    VG_(printf)(
+"    no debug info print usage.\n"
+    );
+}
 
 static Bool found_bb_record(Addr addr)
 {
@@ -52,15 +85,14 @@ static void bbe_bb_instrument(Addr addr)
   VG_(printf)("Analyzing at addr: 0x%08x\n", addr);
   if (global_bbs == NULL)
   {
-    global_bbs = (struct BasicBlockRecordHead *) VG_(malloc)("block_head", sizeof(struct BasicBlockRecordHead));
+      global_bbs = (struct BasicBlockRecordHead *) VG_(malloc)("block_head", sizeof(struct BasicBlockRecordHead));
+      struct BasicBlockRecord *first_bb = VG_(malloc)("block", sizeof(struct BasicBlockRecord));
 
-    struct BasicBlockRecord *first_bb = VG_(malloc)("block", sizeof(struct BasicBlockRecord));
+      first_bb->next = NULL;
+      first_bb->bb_source = addr;
 
-    first_bb->next = NULL;
-    first_bb->bb_source = addr;
-
-    global_bbs->next = first_bb;
-    global_bbs->last = first_bb;
+      global_bbs->next = first_bb;
+      global_bbs->last = first_bb;
   }
   else
   {
@@ -131,13 +163,18 @@ IRSB* bbe_instrument ( VgCallbackClosure* closure,
     VG_(printf)("Testing in translation routine 0x%08x\n", bb->stmts[i]->Ist.IMark.addr);
     VG_(printf)("Number of IR statements in basic block %d\n", bb->stmts_used);
 
-    argv = mkIRExprVec_1( mkIRExpr_HWord( (HWord) bb->stmts[i]->Ist.IMark.addr));
+    Addr test_addr = bb->stmts[i]->Ist.IMark.addr;
 
-    di = unsafeIRDirty_0_N( 0, "bbe_bb_instrument",
-			    VG_(fnptr_to_fnentry( &bbe_bb_instrument) ),
-			    argv);
+    if (test_addr >= clo_start_address && test_addr <= clo_end_address)
+    {
+      argv = mkIRExprVec_1( mkIRExpr_HWord( (HWord) bb->stmts[i]->Ist.IMark.addr));
 
-    addStmtToIRSB( sbOut, IRStmt_Dirty(di) );
+      di = unsafeIRDirty_0_N( 0, "bbe_bb_instrument",
+			      VG_(fnptr_to_fnentry( &bbe_bb_instrument) ),
+			      argv);
+
+      addStmtToIRSB( sbOut, IRStmt_Dirty(di) );
+    }
 
     for(; i < bb->stmts_used; i++)
     {
@@ -201,7 +238,12 @@ IRSB* bbe_instrument ( VgCallbackClosure* closure,
 
 static void bbe_fini(Int exitcode)
 {
-  VgFile *fp = VG_(fopen)("test_output", VKI_O_CREAT|VKI_O_WRONLY, VKI_S_IRUSR | VKI_S_IWUSR | VKI_S_IRGRP | VKI_S_IWGRP);
+  const char *filename = "test_output";
+
+  if (clo_output_prefix != 0)
+    filename = clo_output_prefix;
+
+  VgFile *fp = VG_(fopen)(filename, VKI_O_CREAT|VKI_O_WRONLY, VKI_S_IRUSR | VKI_S_IWUSR | VKI_S_IRGRP | VKI_S_IWGRP);
 
   struct BasicBlockRecord *cur = global_bbs->next;
 
@@ -234,7 +276,9 @@ static void bbe_pre_clo_init(void)
    //Should really keep tabs on VG_(track_die_mem_munmap) also to see if files are ever unloaded from memory
    VG_(track_die_mem_munmap) ( bbe_die_mem_munmap );
 
-   /* No needs, no core events to track */
+   VG_(needs_command_line_options) (bbe_process_cmd_line_option,
+               			  bbe_print_usage,
+                                  bbe_print_debug_usage);
 }
 
 VG_DETERMINE_INTERFACE_VERSION(bbe_pre_clo_init)
