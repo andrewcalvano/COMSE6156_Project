@@ -55,9 +55,9 @@ struct BasicBlockRecordHead {
 
 struct BasicBlockRecordHead *global_bbs = NULL;
 
-
 static Int clo_start_address = 0;
 static Int clo_end_address = 0xFFFFFFFF;
+static const char *clo_library_name = 0;
 static const char *clo_output_prefix = 0;
 
 VgFile *mmap_fh = 0;
@@ -66,9 +66,15 @@ static Bool bbe_process_cmd_line_option(const HChar* arg)
 {
     if( VG_BHEX_CLO(arg, "--start_address", clo_start_address, 0x00, 0xFFFFFFFF)) {}
     else if (VG_BHEX_CLO(arg, "--end_address", clo_end_address, 0x00, 0xFFFFFFFF)) {}
+    else if (VG_STR_CLO(arg, "--library_name", clo_library_name)) {}
     else if (VG_STR_CLO(arg, "--output_prefix", clo_output_prefix)) {}
     else
         return False;
+
+    //Ensure clo_start_address and clo_end_address are not supplied if clo_library_name is supplied
+    //and vice versa
+    if (clo_library_name)
+        tl_assert((clo_start_address == 0x00 && clo_end_address == 0xFFFFFFFF));
 
     return True;
 }
@@ -210,6 +216,7 @@ static void bbe_post_clo_init(void)
   }
 
   mmap_fh = VG_(fopen)(mmap_filename, VKI_O_CREAT|VKI_O_WRONLY, VKI_S_IRUSR | VKI_S_IWUSR | VKI_S_IRGRP | VKI_S_IWGRP);
+
 }
 
 static void bbe_new_mem_mmap(Addr a, SizeT len, Bool rr, Bool ww, Bool xx, ULong di_handle )
@@ -224,16 +231,42 @@ static void bbe_new_mem_mmap(Addr a, SizeT len, Bool rr, Bool ww, Bool xx, ULong
   VG_(pp_addrinfo)( a, &test);
 
   if (test.Addr.SegmentKind.segkind == SkFileC && test.Addr.SegmentKind.hasX)
+  {
      VG_(fprintf)(mmap_fh, "%s,0x%08x,0x%08x\n", test.Addr.SegmentKind.filename, a, len);
 
-  //If segment is executable and corresponds to a mapped file (not JIT) then we 
-  //should record this so that we know which basic blocks correspond to which code
-  //in which file. At termination we can write everything to a file and then do mmap
-  //relations offline by having an mmap file or by emitting separate files for each
-  //maped code file loaded and executed.
+     //If segment is executable and corresponds to a mapped file (not JIT) then we 
+     //should record this so that we know which basic blocks correspond to which code
+     //in which file. At termination we can write everything to a file and then do mmap
+     //relations offline by having an mmap file or by emitting separate files for each
+     //maped code file loaded and executed.
 
-  //We need to extract filenames for mmap executable regions and write this to a separate
-  //output file.
+     //We need to extract filenames for mmap executable regions and write this to a separate
+     //output file.
+     //Allow comparison against library names to grab addresses to instrument
+     //This is useful for PIE binaries and shared libraries
+     //
+     //Also make sure the user is not currently instrumeting a range
+     //if (clo_start_address == 0x00 && clo_end_address == 0xFFFFFFFF)
+     //{
+     if (clo_library_name != NULL)
+     {
+     	char *fname_ptr = VG_(strrchr)(test.Addr.SegmentKind.filename, '/');
+     	VG_(printf)("Filename without path %s\n", fname_ptr + 1);
+
+        if(!VG_(strncmp)(fname_ptr+1, clo_library_name, VG_(strlen(clo_library_name))))
+        {
+			if (clo_start_address == 0 && clo_end_address == 0xFFFFFFFF)
+			{
+				VG_(printf)("No instrumentation before now");
+				clo_start_address = a;
+				clo_end_address = a + len;
+			}
+
+			//There are some cases left out here that we should probably handle but
+			//ignore for now.
+		}
+     }          
+  }
 }
 
 static void bbe_die_mem_munmap( Addr a, SizeT len )
@@ -268,7 +301,15 @@ IRSB* bbe_instrument ( VgCallbackClosure* closure,
 
     Addr test_addr = bb->stmts[i]->Ist.IMark.addr;
 
-    if (test_addr >= clo_start_address && test_addr <= clo_end_address)
+    //If clo_library_name is set we need to wait until clo_start_address and clo_end_address
+    //are set by waiting for the MMAP to occur
+    VG_(printf)("Testing expression 1 %d\n", (clo_library_name && (clo_start_address != 0x00 && clo_end_address != 0xFFFFFFFF) &&
+        (test_addr >= clo_start_address && test_addr <= clo_end_address)));
+    VG_(printf)("Testing expression 2 %d\n", ((!clo_library_name && (test_addr >= clo_start_address && test_addr <= clo_end_address))));
+    if ((clo_library_name && (clo_start_address != 0x00 && clo_end_address != 0xFFFFFFFF) &&
+        (test_addr >= clo_start_address && test_addr <= clo_end_address)) ||
+       ((!clo_library_name && (test_addr >= clo_start_address && test_addr <= clo_end_address)))
+       )
     {
       argv = mkIRExprVec_1( mkIRExpr_HWord( (HWord) bb->stmts[i]->Ist.IMark.addr));
 
