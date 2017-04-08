@@ -16,9 +16,36 @@
 #include "pub_tool_mallocfree.h"
 #include "pub_tool_options.h"
 
+//Probably should also have a program counter to know when
+//the record appeared, if there is an munmap and then a mmap
+//at a later time you would want to create a new basic block
+//record
+
+/* This structure is used to create transitions
+   from separeated basic block executions
+   resulting from thread scheduling and context
+   switching.
+*/
+struct ThreadBBInfo {
+    Int thread_id;
+    Addr last_bb;
+    struct ThreadBBInfo *next;
+};
+
+struct ThreadBBInfoHead {
+    struct ThreadBBInfo *next;
+    struct ThreadBBInfo *last;
+};
+
+ULong total_threads = 0;
+ThreadId active_thread = 1;
+
+static struct ThreadBBInfoHead *thread_list = 0;
+
 struct BasicBlockRecord {
-      Addr bb_source;
-      struct BasicBlockRecord *next;
+    Addr bb_source;
+    Addr bb_dest;
+    struct BasicBlockRecord *next;
 };
 
 struct BasicBlockRecordHead {
@@ -32,6 +59,8 @@ struct BasicBlockRecordHead *global_bbs = NULL;
 static Int clo_start_address = 0;
 static Int clo_end_address = 0xFFFFFFFF;
 static const char *clo_output_prefix = 0;
+
+VgFile *mmap_fh = 0;
 
 static Bool bbe_process_cmd_line_option(const HChar* arg)
 {
@@ -60,7 +89,43 @@ static void bbe_print_debug_usage(void)
     );
 }
 
-static Bool found_bb_record(Addr addr)
+static void bbe_thread_call( ThreadId tid, ULong disp )
+{
+    if (tid >= total_threads) 
+    {
+        //Need to allocate a new thread structure to hold last
+        //bb address
+	if (thread_list == 0)
+	{
+          thread_list = VG_(malloc)("thread_head", sizeof(struct ThreadBBInfoHead));
+	  struct ThreadBBInfo *new_tinfo = VG_(malloc)("thread", sizeof(struct ThreadBBInfo));
+
+	  new_tinfo->thread_id = tid;
+	  new_tinfo->last_bb = 0;
+          new_tinfo->next = 0;
+
+          thread_list->next = new_tinfo;
+          thread_list->last = new_tinfo;
+	}
+        else
+        {
+ 	  struct ThreadBBInfo *new_tinfo = VG_(malloc)("thread", sizeof(struct ThreadBBInfo));
+
+          new_tinfo->thread_id = tid;
+          new_tinfo->last_bb = 0; 
+          new_tinfo->next = 0;
+
+          thread_list->last->next = new_tinfo;
+          thread_list->last = new_tinfo;
+        }
+
+        total_threads = tid + 1;
+    }
+    VG_(printf)("New thread called with tid %d\n", (ULong) tid);
+    active_thread = tid;
+}
+
+static Bool found_bb_record(Addr source, Addr dest)
 {
   struct BasicBlockRecord *cur;
 
@@ -68,9 +133,9 @@ static Bool found_bb_record(Addr addr)
   while (cur != NULL)
   {
 
-    if (addr == cur->bb_source)
+    if (source == cur->bb_source && dest == cur->bb_dest)
     {
-      VG_(printf)("Already covered address 0x%08x\n", addr);
+      //VG_(printf)("Already covered pair 0x%08x,0x%08x\n", source, dest);
       return 1;
     }
 
@@ -80,39 +145,71 @@ static Bool found_bb_record(Addr addr)
   return 0;
 }
 
+static struct ThreadBBInfo * find_tinfo_entry(ThreadId tid)
+{
+  struct ThreadBBInfo *cur;
+
+  cur = thread_list->next;
+
+  while (cur != NULL)
+  {
+    if (cur->thread_id == tid)
+      return cur;
+
+    cur = cur->next;
+  }
+
+  return NULL;
+}
+
 static void bbe_bb_instrument(Addr addr)
 {
-  VG_(printf)("Analyzing at addr: 0x%08x\n", addr);
-  if (global_bbs == NULL)
+  //VG_(printf)("Analyzing at addr: 0x%08x\n", addr);
+  struct ThreadBBInfo *tinfo = find_tinfo_entry(active_thread);
+
+  tl_assert(tinfo != NULL);
+
+  if (tinfo->last_bb && tinfo->last_bb != addr && !found_bb_record(tinfo->last_bb, addr))
   {
-      global_bbs = (struct BasicBlockRecordHead *) VG_(malloc)("block_head", sizeof(struct BasicBlockRecordHead));
-      struct BasicBlockRecord *first_bb = VG_(malloc)("block", sizeof(struct BasicBlockRecord));
+    //VG_(printf)("Creating new basic block record for 0x%08x\n", addr);
+    struct BasicBlockRecord *new_record = VG_(malloc)("block", sizeof(struct BasicBlockRecord));
 
-      first_bb->next = NULL;
-      first_bb->bb_source = addr;
-
-      global_bbs->next = first_bb;
-      global_bbs->last = first_bb;
-  }
-  else
-  {
-    Bool result = found_bb_record(addr);
-
-    if (!found_bb_record(addr))
-    {
-      VG_(printf)("Creating new basic block record for 0x%08x\n", addr);
-      struct BasicBlockRecord *new_record = VG_(malloc)("block", sizeof(struct BasicBlockRecord));
+    if (global_bbs->last != NULL)
       global_bbs->last->next = new_record;
-      global_bbs->last = new_record;
 
-      new_record->bb_source = addr;
-      new_record->next = NULL;
-    }
+    if (global_bbs->next == NULL)
+      global_bbs->next = new_record;
+
+    global_bbs->last = new_record;
+
+    VG_(printf)("Testing pair 0x%08x,0x%08x\n", tinfo->last_bb, addr);
+
+    new_record->bb_source = tinfo->last_bb;
+    new_record->bb_dest = addr;
+    new_record->next = NULL;
   }
+
+  tinfo->last_bb = addr;
 }
 
 static void bbe_post_clo_init(void)
 {
+  global_bbs = (struct BasicBlockRecordHead *) VG_(malloc)("block_head", sizeof(struct BasicBlockRecordHead));
+
+  global_bbs->next = NULL;
+  global_bbs->last = NULL;
+
+  char *mmap_filename = (char *) "test_output.mmap";
+
+  if (clo_output_prefix != 0)
+  {
+    mmap_filename = VG_(malloc)("filename", (VG_(strlen)(clo_output_prefix) + VG_(strlen)(".mmap") + 1));
+    VG_(memset)(mmap_filename, 0x00, VG_(strlen)(clo_output_prefix) + VG_(strlen)(".mmap") + 1);
+    VG_(strncpy)(mmap_filename, clo_output_prefix, VG_(strlen)(clo_output_prefix));
+    VG_(strncat)(mmap_filename, ".mmap", VG_(strlen)(".mmap"));
+  }
+
+  mmap_fh = VG_(fopen)(mmap_filename, VKI_O_CREAT|VKI_O_WRONLY, VKI_S_IRUSR | VKI_S_IWUSR | VKI_S_IRGRP | VKI_S_IWGRP);
 }
 
 static void bbe_new_mem_mmap(Addr a, SizeT len, Bool rr, Bool ww, Bool xx, ULong di_handle )
@@ -126,11 +223,17 @@ static void bbe_new_mem_mmap(Addr a, SizeT len, Bool rr, Bool ww, Bool xx, ULong
 
   VG_(pp_addrinfo)( a, &test);
 
+  if (test.Addr.SegmentKind.segkind == SkFileC && test.Addr.SegmentKind.hasX)
+     VG_(fprintf)(mmap_fh, "%s,0x%08x,0x%08x\n", test.Addr.SegmentKind.filename, a, len);
+
   //If segment is executable and corresponds to a mapped file (not JIT) then we 
   //should record this so that we know which basic blocks correspond to which code
   //in which file. At termination we can write everything to a file and then do mmap
   //relations offline by having an mmap file or by emitting separate files for each
   //maped code file loaded and executed.
+
+  //We need to extract filenames for mmap executable regions and write this to a separate
+  //output file.
 }
 
 static void bbe_die_mem_munmap( Addr a, SizeT len )
@@ -160,8 +263,8 @@ IRSB* bbe_instrument ( VgCallbackClosure* closure,
     }
 
     //Print address of super block
-    VG_(printf)("Testing in translation routine 0x%08x\n", bb->stmts[i]->Ist.IMark.addr);
-    VG_(printf)("Number of IR statements in basic block %d\n", bb->stmts_used);
+    //VG_(printf)("Testing in translation routine 0x%08x\n", bb->stmts[i]->Ist.IMark.addr);
+    //VG_(printf)("Number of IR statements in basic block %d\n", bb->stmts_used);
 
     Addr test_addr = bb->stmts[i]->Ist.IMark.addr;
 
@@ -238,10 +341,15 @@ IRSB* bbe_instrument ( VgCallbackClosure* closure,
 
 static void bbe_fini(Int exitcode)
 {
-  const char *filename = "test_output";
+  char *filename = (char *) "test_output.coverage";
 
   if (clo_output_prefix != 0)
-    filename = clo_output_prefix;
+  {
+    filename = VG_(malloc)("filename", (VG_(strlen)(clo_output_prefix) + VG_(strlen)(".coverage") + 1));
+    VG_(memset)((char *) filename, 0x00, VG_(strlen)(clo_output_prefix) + VG_(strlen)(".coverage") + 1);
+    VG_(strncpy)((char *) filename, clo_output_prefix, VG_(strlen)(clo_output_prefix));
+    VG_(strncat)((char *) filename, ".coverage", VG_(strlen)(".coverage"));
+  }
 
   VgFile *fp = VG_(fopen)(filename, VKI_O_CREAT|VKI_O_WRONLY, VKI_S_IRUSR | VKI_S_IWUSR | VKI_S_IRGRP | VKI_S_IWGRP);
 
@@ -249,11 +357,14 @@ static void bbe_fini(Int exitcode)
 
   while (cur != NULL)
   {
-    VG_(fprintf)(fp, "0x%08x\n", cur->bb_source);
+    VG_(fprintf)(fp, "0x%08x,0x%08x\n", cur->bb_source, cur->bb_dest);
     cur = cur->next;
   }
 
   VG_(fclose)(fp);
+
+  //Close the mmap_fh
+  VG_(fclose)(mmap_fh);
 }
 
 static void bbe_pre_clo_init(void)
@@ -279,6 +390,9 @@ static void bbe_pre_clo_init(void)
    VG_(needs_command_line_options) (bbe_process_cmd_line_option,
                			  bbe_print_usage,
                                   bbe_print_debug_usage);
+
+   //Thread Related Callbacks
+   VG_(track_start_client_code)( bbe_thread_call );
 }
 
 VG_DETERMINE_INTERFACE_VERSION(bbe_pre_clo_init)
