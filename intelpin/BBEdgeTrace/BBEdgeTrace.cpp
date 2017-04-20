@@ -7,6 +7,11 @@
 #include <iostream>
 #include <fstream>
 
+KNOB<string> KnobOutputPrefix(KNOB_MODE_WRITEONCE, "pintool", "p", "test_output", "Output prefix for mmap and coverage files.");
+KNOB<string> KnobModuleName(KNOB_MODE_WRITEONCE, "pintool", "m", "", "Module name to instrument");
+KNOB<UINT32> KnobStartAddress(KNOB_MODE_WRITEONCE, "pintool", "s", "0", "Start address to instrument");
+KNOB<UINT32> KnobEndAddress(KNOB_MODE_WRITEONCE, "pintool", "e", "0xFFFFFFFF", "End address to instrument");
+
 struct ThreadBBInfo {
     THREADID thread_id;
     ADDRINT last_bb;
@@ -37,7 +42,7 @@ struct BasicBlockRecordHead {
 struct BasicBlockRecordHead *global_bbs = NULL;
 
 static UINT32 start_address = 0;
-static UINT32 end_address = 0;
+static UINT32 end_address = 0xFFFFFFFF;
 std::string instrument_library_name;
 std::string output_prefix;
 
@@ -108,9 +113,22 @@ VOID instrument_basic_block(ADDRINT bb_addr)
 
 VOID trace(TRACE trace, VOID *v)
 {
+    bool module_instrument = KnobModuleName.Value() != "none";
+
     for (BBL bbl = TRACE_BblHead(trace); BBL_Valid(bbl); bbl = BBL_Next(bbl))
     {
-        BBL_InsertCall(bbl, IPOINT_BEFORE, (AFUNPTR) instrument_basic_block, IARG_ADDRINT, BBL_Address(bbl), IARG_END);
+        ADDRINT bb_addr = BBL_Address(bbl);
+
+        if (!module_instrument && (bb_addr >= start_address && bb_addr <= end_address))
+        {
+            BBL_InsertCall(bbl, IPOINT_BEFORE, (AFUNPTR) instrument_basic_block, IARG_ADDRINT, bb_addr, IARG_END);
+        }
+        else if ((start_address != 0 && end_address != 0xFFFFFFFF) &&
+                 (bb_addr >= start_address && bb_addr <= end_address)
+                )
+        {
+            BBL_InsertCall(bbl, IPOINT_BEFORE, (AFUNPTR) instrument_basic_block, IARG_ADDRINT, bb_addr, IARG_END);
+        }
     }
 }
 
@@ -118,9 +136,31 @@ VOID image_loaded(IMG image, VOID *v)
 {
     const std::string img_name = IMG_Name(image);
 
+    //char *fname_ptr = strrchr(img_name.c_str(), '/'); 
+
+    //cerr << std::string(fname_ptr+1) << " has been loaded" << endl;
+
     uint32_t start = IMG_LowAddress(image);
 
     uint32_t end = IMG_HighAddress(image);
+
+    std::string::size_type pos = img_name.rfind('/');
+
+    if (pos != std::string::npos)
+    {
+        pos += 1;
+
+        std::string test_string = img_name.substr(pos);
+
+        if (test_string == KnobModuleName.Value())
+        {
+            cerr << "Found module to instrument ";
+            cerr << "at start " << start;
+            cerr << " at end " << end << endl;
+            start_address = start;
+            end_address = end;
+        }
+    }
 
     fprintf(mmap_fh, "%s,0x%08x,0x%08x\n", img_name.c_str(), start, end);
 }
@@ -168,18 +208,13 @@ VOID thread_stop(THREADID tid, const CONTEXT *ctx, INT32 flags, VOID *v)
     std::cout << "ThreadID " << tid << " stopped." << std::endl;
 }
 
-VOID init()
-{
-    (void) start_address;
-    (void) end_address;
-}
-
 VOID fini(INT32 code, VOID *v)
 {
     //Write observed basic block information to the output file
-    const char *filename = "test_output.coverage";
+    //const char *filename = "test_output.coverage";
+    std::string filename = KnobOutputPrefix.Value() + std::string(".coverage");
 
-    FILE *fh = fopen(filename, "w+");
+    FILE *fh = fopen(filename.c_str(), "w+");
 
     struct BasicBlockRecord *cur = global_bbs->next;
 
@@ -196,6 +231,8 @@ VOID fini(INT32 code, VOID *v)
 
 INT32 Usage()
 {
+    cerr << KNOB_BASE::StringKnobSummary();
+    cerr << std::endl;
     return -1;
 }
 
@@ -204,6 +241,18 @@ int main(int argc, char *argv[])
     if( PIN_Init(argc,argv) )
     {
         return Usage();
+    }
+
+    start_address = KnobStartAddress.Value();
+    end_address = KnobEndAddress.Value();
+
+    if (KnobModuleName.Value() != std::string("none"))
+    {
+        if (start_address != 0 && end_address != 0xFFFFFFFF)
+        {
+            cerr << "Can not instrument a module name and an address range yet." << endl;
+            return 0;
+        }
     }
 
     PIN_AddThreadStartFunction(thread_start, NULL);
@@ -224,9 +273,10 @@ int main(int argc, char *argv[])
     global_bbs->next = NULL;
     global_bbs->last = NULL;
 
-    const char *mmap_filename = "test_output.mmap";
+    //const char *mmap_filename = "test_output.mmap";
+    std::string mmap_filename = KnobOutputPrefix.Value() + std::string(".mmap");
 
-    mmap_fh = fopen(mmap_filename, "wb+");
+    mmap_fh = fopen(mmap_filename.c_str(), "wb+");
     
     PIN_StartProgram();
     
