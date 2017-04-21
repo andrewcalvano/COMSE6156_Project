@@ -84,6 +84,7 @@ static void bbe_print_usage(void)
     VG_(printf)(
 "    --start_address=<hex_address>       specifies lower limit of addresses to collect coverage for.\n"
 "    --end_address=<hex_address>         specifies upper limit of addresses to collect coverage for.\n"
+"    --library_name=<library_name>       specifies library name to instrument.\n"
 "    --output_prefix=<name>              specifies prefix to dump coverage and mmap data to.\n"
     );
 }
@@ -127,7 +128,7 @@ static void bbe_thread_call( ThreadId tid, ULong disp )
 
         total_threads = tid + 1;
     }
-    VG_(printf)("New thread called with tid %d\n", (ULong) tid);
+    //VG_(printf)("New thread called with tid %d\n", (ULong) tid);
     active_thread = tid;
 }
 
@@ -188,7 +189,7 @@ static void bbe_bb_instrument(Addr addr)
 
         global_bbs->last = new_record;
 
-        VG_(printf)("Testing pair 0x%08x,0x%08x\n", tinfo->last_bb, addr);
+        //VG_(printf)("Testing pair 0x%08x,0x%08x\n", tinfo->last_bb, addr);
 
         new_record->bb_source = tinfo->last_bb;
         new_record->bb_dest = addr;
@@ -223,7 +224,7 @@ static void bbe_new_mem_mmap(Addr a, SizeT len, Bool rr, Bool ww, Bool xx, ULong
     AddrInfo test;
 
     VG_(memset)(&test, 0x00, sizeof(AddrInfo));
-    VG_(printf)("New mmap event at address 0x%08x of length 0x%08x\n", a, len);
+    //VG_(printf)("New mmap event at address 0x%08x of length 0x%08x\n", a, len);
 
     VG_(describe_addr)( a, &test);
 
@@ -250,13 +251,13 @@ static void bbe_new_mem_mmap(Addr a, SizeT len, Bool rr, Bool ww, Bool xx, ULong
         if (clo_library_name != NULL)
         {
              char *fname_ptr = VG_(strrchr)(test.Addr.SegmentKind.filename, '/');
-             VG_(printf)("Filename without path %s\n", fname_ptr + 1);
+             //VG_(printf)("Filename without path %s\n", fname_ptr + 1);
 
             if(!VG_(strncmp)(fname_ptr+1, clo_library_name, VG_(strlen(clo_library_name))))
             {
                 if (clo_start_address == 0 && clo_end_address == 0xFFFFFFFF)
                 {
-                    VG_(printf)("No instrumentation before now");
+                    //VG_(printf)("No instrumentation before now");
                     clo_start_address = a;
                     clo_end_address = a + len;
                 }
@@ -270,7 +271,7 @@ static void bbe_new_mem_mmap(Addr a, SizeT len, Bool rr, Bool ww, Bool xx, ULong
 
 static void bbe_die_mem_munmap( Addr a, SizeT len )
 {
-    VG_(printf)("New munmap call on addr 0x%08x of size 0x%08x\n", a, len);
+    //VG_(printf)("New munmap call on addr 0x%08x of size 0x%08x\n", a, len);
 }
 
 static

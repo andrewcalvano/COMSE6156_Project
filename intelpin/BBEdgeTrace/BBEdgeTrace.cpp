@@ -8,7 +8,7 @@
 #include <fstream>
 
 KNOB<string> KnobOutputPrefix(KNOB_MODE_WRITEONCE, "pintool", "p", "test_output", "Output prefix for mmap and coverage files.");
-KNOB<string> KnobModuleName(KNOB_MODE_WRITEONCE, "pintool", "m", "", "Module name to instrument");
+KNOB<string> KnobModuleName(KNOB_MODE_WRITEONCE, "pintool", "m", "none", "Module name to instrument");
 KNOB<UINT32> KnobStartAddress(KNOB_MODE_WRITEONCE, "pintool", "s", "0", "Start address to instrument");
 KNOB<UINT32> KnobEndAddress(KNOB_MODE_WRITEONCE, "pintool", "e", "0xFFFFFFFF", "End address to instrument");
 

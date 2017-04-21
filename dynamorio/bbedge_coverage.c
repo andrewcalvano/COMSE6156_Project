@@ -194,6 +194,10 @@ instrument_basic_block(void *drcontext, void *tag, instrlist_t *bb,
             return DR_EMIT_DEFAULT;
         }
     }
+    else if (instrument_module_name != NULL && instrument_start_address == 0 && instrument_end_address == 0)
+    {
+        return DR_EMIT_DEFAULT;
+    }
 
     //Need to insert a call to our stub to manage our linked list of 
     //observed basic block transitions
