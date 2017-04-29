@@ -1,0 +1,13 @@
+/bin/tar,0x08048000,0x0809aaef
+/lib/ld-linux.so.2,0xb7784000,0xb77a36bb
+[vdso],0xb7782000,0xb7782d2d
+/lib/i386-linux-gnu/libacl.so.1,0xb4fad000,0xb4fb513b
+/lib/i386-linux-gnu/libselinux.so.1,0xb4f7c000,0xb4f9ec0b
+/lib/i386-linux-gnu/libc.so.6,0xb4dc8000,0xb4f77a7b
+/lib/i386-linux-gnu/libattr.so.1,0xb4dbf000,0xb4dc406f
+/lib/i386-linux-gnu/libpcre.so.3,0xb4d81000,0xb4dbe05f
+/lib/i386-linux-gnu/libdl.so.2,0xb4d7c000,0xb4d8007f
+/lib/i386-linux-gnu/libnss_compat.so.2,0xb4814000,0xb481c24b
+/lib/i386-linux-gnu/libnsl.so.1,0xb47fb000,0xb48137e7
+/lib/i386-linux-gnu/libnss_nis.so.2,0xb47d3000,0xb47de23f
+/lib/i386-linux-gnu/libnss_files.so.2,0xb47c7000,0xb47d22f3

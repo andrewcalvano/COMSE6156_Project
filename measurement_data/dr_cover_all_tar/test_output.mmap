@@ -1,0 +1,14 @@
+/bin/tar,0x0804c01b,0x0809f000
+/home/user/source/dynamorio-release_6_2_0/build/lib32/release/libdynamorio.so.6.1,0x801ac94e,0x8025c000
+/home/user/source/dynamorio-release_6_2_0/build/api/bin/libbbedge_coverage.so,0xb7701bf0,0xb7705000
+/lib/i386-linux-gnu/ld-2.19.so,0xb77070d0,0xb7728000
+/lib/i386-linux-gnu/libc-2.19.so,0xb734dc50,0xb74e4000
+/lib/i386-linux-gnu/libdl-2.19.so,0xb72ebad0,0xb72f0000
+/lib/i386-linux-gnu/libpcre.so.3.13.1,0xb72f1080,0xb732e000
+/lib/i386-linux-gnu/libattr.so.1.1.0,0xb732eca0,0xb7334000
+/lib/i386-linux-gnu/libselinux.so.1,0xb74e9670,0xb7508000
+/lib/i386-linux-gnu/libacl.so.1.1.0,0xb75094f0,0xb7511000
+/lib/i386-linux-gnu/libnsl-2.19.so,0xb70ba1d0,0xb70d0000
+/lib/i386-linux-gnu/libnss_compat-2.19.so,0xb7520e70,0xb7529000
+/lib/i386-linux-gnu/libnss_files-2.19.so,0xb70acad0,0xb70b7000
+/lib/i386-linux-gnu/libnss_nis-2.19.so,0xb75159e0,0xb7520000

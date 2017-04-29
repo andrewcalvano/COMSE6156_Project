@@ -1,0 +1,11 @@
+/home/user/source/valgrind-3.12.0/inst/lib/valgrind/vgpreload_core-x86-linux.so,0x04024000,0x00003000
+/lib/i386-linux-gnu/libacl.so.1.1.0,0x04040000,0x00009000
+/lib/i386-linux-gnu/libselinux.so.1,0x04049000,0x00023000
+/lib/i386-linux-gnu/libc-2.19.so,0x0406d000,0x001b0000
+/lib/i386-linux-gnu/libattr.so.1.1.0,0x0421d000,0x00006000
+/lib/i386-linux-gnu/libpcre.so.3.13.1,0x04223000,0x0003e000
+/lib/i386-linux-gnu/libdl-2.19.so,0x04261000,0x00005000
+/lib/i386-linux-gnu/libnss_compat-2.19.so,0x04028000,0x00009000
+/lib/i386-linux-gnu/libnsl-2.19.so,0x04481000,0x00019000
+/lib/i386-linux-gnu/libnss_nis-2.19.so,0x04031000,0x0000c000
+/lib/i386-linux-gnu/libnss_files-2.19.so,0x0449a000,0x0000c000
