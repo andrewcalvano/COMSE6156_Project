@@ -1,0 +1,161 @@
+There were four different configurations used in this evaluation.
+
+This file describes how to run each tool with the atop utility in order
+to collect measurement data.
+
+First off install the software to instrument (tar should already been installed)
+
+    sudo apt-get install okular vlc 
+
+For all configurations time and atop are used to collect measurements. Before each
+run launch atop in another terminal by doing the following
+
+    atop -w log_name.atop
+
+The time utility should also wrap the evaluation runs to measure runtime
+
+    time <instrumentation command> -- <program command with arguments>
+
+Each evaluation run is slightly different for each application
+
+    For okular the test.pdf file is used and okular is launched as follows
+
+        okular test.pdf
+
+    When the pdf is fully loaded the application is manually terminated and the run is over.
+
+    For vlc the test.mp4 file is used and vlc is launched as follows
+
+        vlc test.mp4
+
+    When the mp4 is fully loaded and the 5 second video has played the application is manually terminated and the run is over.
+
+    For tar the test_dir directory is used and tar is launched as follows
+
+        tar -cvzf test_dir.tar.gz test_dir/
+
+    The test should finish automatically when the archive is fully created.
+
+There were four configurations used for this evaluation.
+
+    The first configuration measured each application without any instrumentation at all.
+
+        For this simply run atop in one terminal window and wrap the application with arguments with the time utility.
+
+            In one terminal
+
+                atop -w log_name.atop
+
+            In the other terminal (as an example)
+
+                time vlc test.mp4 
+
+    The second configuration measured each application with just the instrumentation runtime and no tools.
+
+        For this run atop in one terminal window and wrap each application with the instrumentation engine. (empty tool)
+
+            For PIN (vlc as an example)
+
+                The NullPIN tool needs to be installed and built for this step, the NullPIN tool is included in 
+                <repo_root>/intelpin/NullPIN/
+
+                time <path_to_pin>/pin -t <path_to_pin/source/tools/NullPIN/obj-ia32/NullPIN.so -- vlc test.mp4
+
+            For Valgrind (vlc as an example)
+
+                The none tool is included with Valgrind for testing in this manner
+
+                time <path_to_valgrind/inst/bin/valgrind --tool=none -- vlc test.mp4
+
+            For DynamoRIO (vlc as an example)
+
+                The empty tool is included with DynamoRIO for testing in this manner.
+
+                time <path_to_dynamorio>/build/bin32/drrun -c <path_to_dynamorio>/api/bin/libempty.so -- vlc test.mp4
+
+
+    The third configuration measured each application with the basic block edge coverage instrumentation tool
+
+        For this configuration run atop in one terminal window and wrap each application with the instrumentation and tool.
+
+            For PIN (vlc as an example)
+
+                time <path_to_pin>/pin -t <path_to_pin>/source/tools/BBEdgeCoverage/obj-ia32/BBEdgeCoverage.so -- vlc test.mp4
+
+            For Valgrind (vlc as an example)
+
+                time <path_to_valgrind>/inst/bin/valgrind --tool=bbedgegrind -- vlc test.mp4
+
+            For DynamoRIO (vlc as an example)
+
+                time <path_to_dynamorio>/build/bin32/drrun -c <path_to_dynamorio>/api/bin/libbbedge_coverage.so -- vlc test.mp4
+
+    The fourth configuration measured each application with the basic block edge coverage tool constrained to the main executable
+    address range.
+
+        For this configuration we need the start and end executable addresses for each binary: okular, vlc, and tar
+
+        I used Binary Ninja to obtain segment information from these binaries and seleted the read + executable segment as the address
+        range to instrument.
+
+        Run atop in one terminal window and wrap each application with the instrumentation, tool, and address range.
+
+        For PIN (vlc as an example)
+
+            time <path_to_pin>/pin -t <path_to_pin>/source/tools/BBEdgeCoverage.so/obj-ia32/BBEdgeCoverage.so -s <start_address> -e <end_address> -- vlc test.mp4
+
+        For Valgrind (vlc as an example)
+
+                time <path_to_valgrind>/inst/bin/valgrind --tool=bbedgegrind --start_address=<start_address> --end_address=<end_address> -- vlc test.mp4
+
+        For DynamoRIO (vlc as an example)
+
+                time <path_to_dynamorio>/build/bin32/drrun -c <path_to_dynamorio>/api/bin/libbbedge_coverage.so -start_address <start_address> -end_address <end_address> -- vlc test.mp4
+
+
+After all the data is collected the time information should be recorded and the atop logs should be ready to examine
+
+To automate the collection of CPU usage and MEM usage statistics the following steps are followed:
+
+    The collect_average.py script is used to automate the collection of the average CPU and MEM utilization
+
+    The python -c input commands are used to automate the atop output collection since atop is an interactive application, but
+    it is not ideal to sift through 15 minutes of 1 second intervals manually.
+
+    For CPU Utilization
+
+        python -c 'print "t" * 2000' | atop -r log_name.atop > output
+
+        For No Instrumentation
+
+            python collect_average.py <application_name>
+
+        For PIN and DynamoRIO
+
+            python collect_average.py <application_name>
+
+        For Valgrind
+
+            python collect_average.py <tool_name>
+
+        This will produce a statistic to stdout that can be recorded
+        
+    For MEM Utilization
+
+        For each atop log file repeat the following:
+
+            python -c 'print "t" * 2000' | atop -m -r log_name.atop > output
+
+            For No Instrumentation
+
+                python collect_average.py <application_name>
+
+            For PIN and DynamoRIO
+
+                python collect_average.py <application_name>
+
+            For Valgrind
+
+                python collect_average.py <tool_name>
+
+            This will produce a statistic to stdout that can be recorded

@@ -1,0 +1,141 @@
+Intel PIN
+
+    The version of Intel PIN used for this evaluation was 3.2-81205. 
+
+    To build the basic block edge coverage tool for PIN follow these directions:
+
+    1.) Download the tar.gz archive for this release from: 
+
+        http://software.intel.com/sites/landingpage/pintool/downloads/pin-3.2-81205-gcc-linux.tar.gz
+
+    2.) Extract the pin release from the archive
+
+        tar xzvf pin-3.2-81205-gcc-linux.tar.gz
+
+    3.) Copy the basic block edge coverage tool to a pin tool directory
+
+        cp -r intelpin/BBEdgeTrace pin-3.2-81205-gcc-linux/source/tools/
+
+    4.) Add an entry to the makefile file in the pin tools directory
+
+        Edit pin-3.2-81205-gcc-linux/source/tools/makefile
+
+        Add BBEdgeTrace to the ALL_TEST_DIRS variable.
+
+    5.) Build the tool (This will build all tools so make take a bit)
+
+        cd pin-3.2-81205-gcc-linux/source/tools/
+
+        make
+
+    6.) The tool will be in
+
+        pin-3.2-81205-gcc-linux/source/tools/BBEdgeTrace/obj-ia32/BBEdgeTrace.so
+
+    To run the basic block edge coverage tool using PIN use the following command:
+
+        <path_to>/pin-3.2-81205-gcc-linux/pin -t <path_to>/pin-3.2-81205-gcc-linux/source/tools/BBEdgeTrace/obj-ia32/BBEdgeTrace.so -- <program with arguments>
+
+Valgrind
+
+    The version of Valgrind used for the evaluation was 3.12.0
+
+    To build Valgrind the autotools package needs to be installed
+
+        sudo apt-get install autoconf
+
+    To build the basic block edge coverage tool for Valgrind follow these directions:
+
+    1.) Download the Valgrind source release from the following URL:
+
+        http://valgrind.org/downloads/valgrind-3.12.0.tar.bz2
+
+    2.) Extract the valgrind release archive
+
+        bunzip2 valgrind-3.12.0.tar.bz2
+
+        tar xvf valgrind-3.12.0.tar
+
+    3.) Copy the basic block edge tool to the valgrind source directory
+
+        cp -r valgrind/bbedgegrind <path_to>/valgrind-3.12.0/
+
+    4.) Edit the build files to make sure the tool gets built
+
+        Edit the valgrind-3.12.0/configure.ac file
+
+        Add the following to the AC_CONFIG_FILES variable
+
+            bbedgegrind/Makefile
+            bbedgegrind/docs/Makefile
+            bbedgegrind/tests/Makefile
+
+    5.) Build Valgrind and all tools
+
+        cd valgrind-3.12.0
+
+        autogen.sh
+
+        ./configure --prefix=$(pwd)/inst
+
+        make install        
+
+    6.) The tool will be placed in 
+
+        valgrind-3.12.0/inst/bin/
+
+        valgrind-3.12.0/inst/lib/valgrind/bbedgegrind-x86-linux
+
+    To run the basic block edge coverage tool using Valgrind use the following command:
+
+        <path_to>/valgrind-3.12.0/inst/bin/valgrind --tool=bbedgegrind -- <program with arguments>
+
+
+DynamoRIO
+
+    The version of DynamoRIO used for the evaluation was 6.2.0
+
+    To build DynamoRIO CMake needs to be installed
+
+        sudo apt-get install cmake
+
+    To build the basic block edge coverage using DynamoRIO follow these steps:
+
+    1.) Download the DyanamoRIO source release:
+
+       https://github.com/DynamoRIO/dynamorio/archive/release_6_2_0.tar.gz 
+
+       This will download an archive called dynamorio-release_6_2_0.tar.gz
+
+    2.) Extract the archive
+
+        tar xvzf dynamorio-release_6_2_0.tar.gz
+
+    3.) Copy the basic block edge coverage tool to the DynamoRIO source 
+
+        cp dynamorio/bbedge_coverage.c dynamorio-release_6_2_0/api/samples
+
+    4.) Edit the CMakeLists.txt in dynamorio-release_6_2_o/api/samples/
+
+        Add the following to the CMakeLists.txt
+
+        add_sample_client(bbedge_coverage "bbedge_coverage.c" "")
+
+    5.) Build everything
+
+        cd dynamorio-release_6_2_0
+
+        mkdir build
+
+        cd build
+
+        cmake ../
+
+        make
+
+    6.) The dynamoRIO client will be in build/api/bin/libbbedge_coverage.so
+
+    To run the basic block edge coverage tool using DynamoRIO use the following command:
+
+        <path_to>/dynamorio-release_6_2_0/build/bin32/drrun -c <path_to>/dynamorio-release_6_2_0/build/api/bin/libbedge_coverage.so -- <program with arguments> 
+
